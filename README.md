@@ -35,12 +35,44 @@ class Customer(SQLModel, table=True):
 - FastAPI example: `example_app_fastapi/`
 - Flask example: `example_app_flask/`
 
+### FastAPI Example Snippet
+
+```python
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI
+from sqlmodel import Session, select
+
+from example_app_fastapi.database import get_session, init_db
+from example_app_fastapi.models import Customer
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(title="SQLModel Encrypted Fields Example", lifespan=lifespan)
+
+@app.post("/customers", response_model=Customer)
+def create_customer(customer: Customer, session: Session = Depends(get_session)) -> Customer:
+    session.add(customer)
+    session.commit()
+    session.refresh(customer)
+    return customer
+
+@app.get("/customers/by-email/{email}", response_model=Customer)
+def get_customer_by_email(email: str, session: Session = Depends(get_session)) -> Customer:
+    statement = select(Customer).where(Customer.email_lookup == email)
+    return session.exec(statement).first()
+```
+
 ### Flask Example Snippet
 
 ```python
-from flask import Flask
+from flask import Flask, jsonify, request
+from sqlmodel import select
 
-from example_app_flask.database import init_db
+from example_app_flask.database import get_session, init_db
 from example_app_flask.models import Customer
 
 app = Flask(__name__)
@@ -48,6 +80,23 @@ app = Flask(__name__)
 @app.before_first_request
 def _init_db() -> None:
     init_db()
+
+@app.post("/customers")
+def create_customer():
+    payload = request.get_json(force=True)
+    customer = Customer(**payload)
+    with get_session() as session:
+        session.add(customer)
+        session.commit()
+        session.refresh(customer)
+        return jsonify(customer.model_dump())
+
+@app.get("/customers/by-email/<string:email>")
+def get_customer_by_email(email: str):
+    with get_session() as session:
+        statement = select(Customer).where(Customer.email_lookup == email)
+        customer = session.exec(statement).first()
+        return jsonify(customer.model_dump())
 ```
 
 ## Notes
