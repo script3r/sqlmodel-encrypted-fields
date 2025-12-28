@@ -30,3 +30,6 @@ Homepage = "https://example.com/sqlmodel-encrypted-fields"
 [tool.setuptools.packages.find]
 include = ["sqlmodel_encrypted_fields"]
 exclude = ["example_app", "example_app.*", "tests", "tests.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
