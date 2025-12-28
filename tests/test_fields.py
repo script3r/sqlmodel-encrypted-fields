@@ -22,7 +22,7 @@ from sqlmodel_encrypted_fields import (
     EncryptedJSON,
     EncryptedString,
     EncryptedType,
-    configure_keysets,
+    KeysetRegistry,
 )
 
 
@@ -49,15 +49,15 @@ def _fixture_path(name: str) -> Path:
 
 
 def test_missing_configuration_raises() -> None:
-    configure_keysets({})
-    field = EncryptedString()
+    registry = KeysetRegistry({})
+    field = EncryptedString(registry=registry)
     with pytest.raises(ConfigurationError):
         _ = field._keyset_manager.aead_primitive
 
 
 def test_encrypt_decrypt_string_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
-    field = EncryptedString()
+    registry = KeysetRegistry(keysets)
+    field = EncryptedString(registry=registry)
     ciphertext = field.process_bind_param("hello", None)
     assert isinstance(ciphertext, bytes)
     decrypted = field.process_result_value(ciphertext, None)
@@ -65,8 +65,8 @@ def test_encrypt_decrypt_string_roundtrip(keysets: dict[str, dict[str, Any]]) ->
 
 
 def test_encrypt_decrypt_json_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
-    field = EncryptedJSON()
+    registry = KeysetRegistry(keysets)
+    field = EncryptedJSON(registry=registry)
     payload = {"a": 1, "b": [True, False], "c": "text"}
     ciphertext = field.process_bind_param(payload, None)
     decrypted = field.process_result_value(ciphertext, None)
@@ -74,8 +74,8 @@ def test_encrypt_decrypt_json_roundtrip(keysets: dict[str, dict[str, Any]]) -> N
 
 
 def test_encrypt_decrypt_bytes_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
-    field = EncryptedBytes()
+    registry = KeysetRegistry(keysets)
+    field = EncryptedBytes(registry=registry)
     payload = b"\x00\xffbinary"
     ciphertext = field.process_bind_param(payload, None)
     decrypted = field.process_result_value(ciphertext, None)
@@ -83,7 +83,7 @@ def test_encrypt_decrypt_bytes_roundtrip(keysets: dict[str, dict[str, Any]]) -> 
 
 
 def test_custom_serializer_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
+    registry = KeysetRegistry(keysets)
 
     def serialize(value: int) -> str:
         return f"v:{value}"
@@ -91,27 +91,27 @@ def test_custom_serializer_roundtrip(keysets: dict[str, dict[str, Any]]) -> None
     def deserialize(value: str) -> int:
         return int(value.split(":", 1)[1])
 
-    field = EncryptedType(serializer=serialize, deserializer=deserialize)
+    field = EncryptedType(serializer=serialize, deserializer=deserialize, registry=registry)
     ciphertext = field.process_bind_param(42, None)
     decrypted = field.process_result_value(ciphertext, None)
     assert decrypted == 42
 
 
 def test_aad_callback_supports_str(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
+    registry = KeysetRegistry(keysets)
 
     def aad_callback() -> str:
         return "context"
 
-    field = EncryptedString(aad_callback=aad_callback)
+    field = EncryptedString(aad_callback=aad_callback, registry=registry)
     ciphertext = field.process_bind_param("data", None)
     decrypted = field.process_result_value(ciphertext, None)
     assert decrypted == "data"
 
 
 def test_memoryview_result_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
-    field = EncryptedString()
+    registry = KeysetRegistry(keysets)
+    field = EncryptedString(registry=registry)
     ciphertext = field.process_bind_param("value", None)
     decrypted = field.process_result_value(memoryview(ciphertext), None)
     assert decrypted == "value"
@@ -119,8 +119,8 @@ def test_memoryview_result_roundtrip(keysets: dict[str, dict[str, Any]]) -> None
 
 @pytest.mark.skipif(not DAEAD_AVAILABLE, reason="Deterministic AEAD not available")
 def test_deterministic_ciphertext_is_stable(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
-    field = DeterministicEncryptedString(keyset="deterministic")
+    registry = KeysetRegistry(keysets)
+    field = DeterministicEncryptedString(keyset="deterministic", registry=registry)
     first = field.process_bind_param("email@example.com", None)
     second = field.process_bind_param("email@example.com", None)
     assert first == second
@@ -128,14 +128,14 @@ def test_deterministic_ciphertext_is_stable(keysets: dict[str, dict[str, Any]]) 
 
 @pytest.mark.skipif(not DAEAD_AVAILABLE, reason="Deterministic AEAD not available")
 def test_deterministic_roundtrip_json_and_bytes(keysets: dict[str, dict[str, Any]]) -> None:
-    configure_keysets(keysets)
+    registry = KeysetRegistry(keysets)
 
-    json_field = DeterministicEncryptedJSON(keyset="deterministic")
+    json_field = DeterministicEncryptedJSON(keyset="deterministic", registry=registry)
     json_payload = {"x": 1, "y": "z"}
     json_cipher = json_field.process_bind_param(json_payload, None)
     assert json_field.process_result_value(json_cipher, None) == json_payload
 
-    bytes_field = DeterministicEncryptedBytes(keyset="deterministic")
+    bytes_field = DeterministicEncryptedBytes(keyset="deterministic", registry=registry)
     bytes_payload = b"blob"
     bytes_cipher = bytes_field.process_bind_param(bytes_payload, None)
     assert bytes_field.process_result_value(bytes_cipher, None) == bytes_payload

@@ -12,14 +12,14 @@ from sqlmodel_encrypted_fields.fields import (
     EncryptedType,
     KeysetConfig,
     KeysetManager,
-    configure_keysets,
+    KeysetRegistry,
 )
 
 __all__ = [
     "ConfigurationError",
     "KeysetConfig",
     "KeysetManager",
-    "configure_keysets",
+    "KeysetRegistry",
     "EncryptedType",
     "EncryptedString",
     "EncryptedJSON",

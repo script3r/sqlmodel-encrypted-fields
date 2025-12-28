@@ -5,18 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException
 from sqlmodel import Session, select
 
-from example_app.database import get_session, init_db
-from example_app.models import Customer
-from sqlmodel_encrypted_fields import configure_keysets
+from example_app_fastapi.database import get_session, init_db
+from example_app_fastapi.models import Customer
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    configure_keysets(
-        {
-            "default": {"path": "./tests/fixtures/aead_keyset.json", "cleartext": True},
-            "deterministic": {"path": "./tests/fixtures/daead_keyset.json", "cleartext": True},
-        }
-    )
     init_db()
     yield
 

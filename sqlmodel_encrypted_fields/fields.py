@@ -77,38 +77,60 @@ class KeysetConfig:
             raise ConfigurationError("Encrypted keysets must specify `master_key_aead`.")
 
 
-_CONFIG: dict[str, dict[str, Any]] | None = None
+class KeysetRegistry:
+    """Registry that owns keyset configuration and keyset handle cache."""
 
+    def __init__(self, config: dict[str, dict[str, Any]]) -> None:
+        self._config = config
+        self._handle_cache: dict[tuple[str, str, bool, int], Any] = {}
 
-def configure_keysets(config: dict[str, dict[str, Any]]) -> None:
-    """Provide global keyset configuration.
+    @property
+    def config(self) -> dict[str, dict[str, Any]]:
+        return self._config
 
-    Expected format:
-    {
-        "default": {
-            "path": "/path/to/keyset.json",
-            "cleartext": True,
-            "master_key_aead": <tink.aead.Aead>,  # optional when cleartext=True
-        }
-    }
-    """
+    def set_config(self, config: dict[str, dict[str, Any]]) -> None:
+        self._config = config
+        self._handle_cache.clear()
 
-    global _CONFIG
-    _CONFIG = config
+    def keyset_manager(self, keyset_name: str, aad_callback: Callable[..., Any]) -> "KeysetManager":
+        return KeysetManager(self, keyset_name, aad_callback)
+
+    def encrypted_type(self, **kwargs: Any) -> "EncryptedType":
+        return EncryptedType(registry=self, **kwargs)
+
+    def encrypted_string(self, **kwargs: Any) -> "EncryptedString":
+        return EncryptedString(registry=self, **kwargs)
+
+    def encrypted_json(self, **kwargs: Any) -> "EncryptedJSON":
+        return EncryptedJSON(registry=self, **kwargs)
+
+    def encrypted_bytes(self, **kwargs: Any) -> "EncryptedBytes":
+        return EncryptedBytes(registry=self, **kwargs)
+
+    def deterministic_encrypted_type(self, **kwargs: Any) -> "DeterministicEncryptedType":
+        return DeterministicEncryptedType(registry=self, **kwargs)
+
+    def deterministic_encrypted_string(self, **kwargs: Any) -> "DeterministicEncryptedString":
+        return DeterministicEncryptedString(registry=self, **kwargs)
+
+    def deterministic_encrypted_json(self, **kwargs: Any) -> "DeterministicEncryptedJSON":
+        return DeterministicEncryptedJSON(registry=self, **kwargs)
+
+    def deterministic_encrypted_bytes(self, **kwargs: Any) -> "DeterministicEncryptedBytes":
+        return DeterministicEncryptedBytes(registry=self, **kwargs)
 
 
 class KeysetManager:
-    _handle_cache: dict[tuple[str, str, bool, int], Any] = {}
-
-    def __init__(self, keyset_name: str, aad_callback: Callable[..., Any]) -> None:
+    def __init__(self, registry: KeysetRegistry, keyset_name: str, aad_callback: Callable[..., Any]) -> None:
+        self._registry = registry
         self.keyset_name = keyset_name
         self.aad_callback = aad_callback
         self._keyset_handle = None
 
     def _get_config(self) -> dict[str, dict[str, Any]]:
-        if _CONFIG is None:
-            raise ConfigurationError("Keysets are not configured. Call configure_keysets() first.")
-        return _CONFIG
+        if not self._registry.config:
+            raise ConfigurationError("Keysets are not configured. Provide a KeysetRegistry with config.")
+        return self._registry.config
 
     def _get_keyset_handle(self) -> Any:
         if self._keyset_handle is not None:
@@ -125,7 +147,7 @@ class KeysetManager:
             keyset_config.cleartext,
             id(keyset_config.master_key_aead) if keyset_config.master_key_aead is not None else 0,
         )
-        cached_handle = self._handle_cache.get(cache_key)
+        cached_handle = self._registry._handle_cache.get(cache_key)
         if cached_handle is not None:
             self._keyset_handle = cached_handle
             return cached_handle
@@ -137,7 +159,7 @@ class KeysetManager:
             else:
                 keyset_handle = read_keyset_handle(reader, keyset_config.master_key_aead)
 
-        self._handle_cache[cache_key] = keyset_handle
+        self._registry._handle_cache[cache_key] = keyset_handle
         self._keyset_handle = keyset_handle
         return keyset_handle
 
@@ -161,17 +183,21 @@ class EncryptedType(TypeDecorator):
     def __init__(
         self,
         *,
+        registry: KeysetRegistry,
         keyset: str = DEFAULT_KEYSET,
         aad_callback: Callable[..., Any] = DEFAULT_AAD_CALLBACK,
         serializer: Callable[[Any], Any] = _json_serialize,
         deserializer: Callable[[Any], Any] = _json_deserialize,
     ) -> None:
         super().__init__()
+        if registry is None:
+            raise ConfigurationError("Keyset registry is required.")
+        self.registry = registry
         self.keyset = keyset
         self.aad_callback = aad_callback
         self.serializer = serializer
         self.deserializer = deserializer
-        self._keyset_manager = KeysetManager(self.keyset, self.aad_callback)
+        self._keyset_manager = self.registry.keyset_manager(self.keyset, self.aad_callback)
 
     def _call_aad(self, value: Any, dialect: Any, is_bind: bool) -> bytes:
         try:

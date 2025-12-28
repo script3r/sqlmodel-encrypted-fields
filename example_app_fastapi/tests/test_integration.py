@@ -5,24 +5,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from example_app.database import get_session
-from example_app.main import app
-from example_app.models import Customer
-from sqlmodel_encrypted_fields import configure_keysets
-
-
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _configure_keysets() -> None:
-    root = _project_root()
-    configure_keysets(
-        {
-            "default": {"path": str(root / "tests" / "fixtures" / "aead_keyset.json"), "cleartext": True},
-            "deterministic": {"path": str(root / "tests" / "fixtures" / "daead_keyset.json"), "cleartext": True},
-        }
-    )
+from example_app_fastapi.database import get_session
+from example_app_fastapi.main import app
+from example_app_fastapi.models import Customer
 
 
 def _test_engine(tmp_path: Path):
@@ -30,8 +15,6 @@ def _test_engine(tmp_path: Path):
 
 
 def test_customer_create_and_lookup(tmp_path: Path) -> None:
-    _configure_keysets()
-
     engine = _test_engine(tmp_path)
     SQLModel.metadata.create_all(engine)
 

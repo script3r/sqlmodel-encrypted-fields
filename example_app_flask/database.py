@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlmodel import Session, SQLModel, create_engine
 
-engine = create_engine("sqlite:///./example_app.db", echo=False)
+engine = create_engine("sqlite:///./example_app_flask.db", echo=False)
 
 
 def init_db() -> None:
