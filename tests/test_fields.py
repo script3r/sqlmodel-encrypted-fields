@@ -55,6 +55,29 @@ def test_missing_configuration_raises() -> None:
         _ = field._keyset_manager.aead_primitive
 
 
+def test_missing_keyset_name_raises(keysets: dict[str, dict[str, Any]]) -> None:
+    registry = KeysetRegistry(keysets)
+    field = EncryptedString(registry=registry, keyset="missing")
+    with pytest.raises(ConfigurationError):
+        _ = field._keyset_manager.aead_primitive
+
+
+def test_missing_keyset_path_raises(tmp_path: Path) -> None:
+    registry = KeysetRegistry({"default": {"path": str(tmp_path / "missing.json"), "cleartext": True}})
+    field = EncryptedString(registry=registry)
+    with pytest.raises(ConfigurationError):
+        _ = field._keyset_manager.aead_primitive
+
+
+def test_encrypted_keyset_requires_master_key() -> None:
+    registry = KeysetRegistry(
+        {"default": {"path": str(_fixture_path("aead_keyset.json")), "cleartext": False}}
+    )
+    field = EncryptedString(registry=registry)
+    with pytest.raises(ConfigurationError):
+        _ = field._keyset_manager.aead_primitive
+
+
 def test_encrypt_decrypt_string_roundtrip(keysets: dict[str, dict[str, Any]]) -> None:
     registry = KeysetRegistry(keysets)
     field = EncryptedString(registry=registry)
