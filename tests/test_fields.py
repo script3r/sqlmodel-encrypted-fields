@@ -30,7 +30,9 @@ from sqlmodel_encrypted_fields import (
 def keysets(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, Any]]:
     tmp_path = tmp_path_factory.mktemp("keysets")
     aead_path = tmp_path / "aead_keyset.json"
-    aead_path.write_text(_fixture_path("aead_keyset.json").read_text(encoding="utf-8"), encoding="utf-8")
+    aead_path.write_text(
+        _fixture_path("aead_keyset.json").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     config = {
         "default": {"path": str(aead_path), "cleartext": True},
@@ -38,7 +40,9 @@ def keysets(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, Any
 
     if DAEAD_AVAILABLE:
         daead_path = tmp_path / "daead_keyset.json"
-        daead_path.write_text(_fixture_path("daead_keyset.json").read_text(encoding="utf-8"), encoding="utf-8")
+        daead_path.write_text(
+            _fixture_path("daead_keyset.json").read_text(encoding="utf-8"), encoding="utf-8"
+        )
         config["deterministic"] = {"path": str(daead_path), "cleartext": True}
 
     return config
@@ -63,7 +67,9 @@ def test_missing_keyset_name_raises(keysets: dict[str, dict[str, Any]]) -> None:
 
 
 def test_missing_keyset_path_raises(tmp_path: Path) -> None:
-    registry = KeysetRegistry({"default": {"path": str(tmp_path / "missing.json"), "cleartext": True}})
+    registry = KeysetRegistry(
+        {"default": {"path": str(tmp_path / "missing.json"), "cleartext": True}}
+    )
     field = EncryptedString(registry=registry)
     with pytest.raises(ConfigurationError):
         _ = field._keyset_manager.aead_primitive

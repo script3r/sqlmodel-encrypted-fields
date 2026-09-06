@@ -1,0 +1,5 @@
+include CHANGELOG.md tox.ini
+recursive-include tests *.py *.json
+recursive-include example_app_fastapi *.py
+recursive-include example_app_flask *.py
+recursive-include scripts *.py

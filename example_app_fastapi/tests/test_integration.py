@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from example_app_fastapi import database
 from example_app_fastapi.database import get_session
 from example_app_fastapi.main import app
 from example_app_fastapi.models import Customer
@@ -14,16 +16,27 @@ def _test_engine(tmp_path: Path):
     return create_engine(f"sqlite:///{tmp_path / 'test.db'}", echo=False)
 
 
-def test_customer_create_and_lookup(tmp_path: Path) -> None:
+@pytest.fixture
+def client_and_engine(tmp_path: Path, monkeypatch):
     engine = _test_engine(tmp_path)
     SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(database, "engine", engine)
 
     def _session_override():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = _session_override
-    client = TestClient(app)
+    try:
+        with TestClient(app) as client:
+            yield client, engine
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+
+def test_customer_create_and_lookup(client_and_engine) -> None:
+    client, engine = client_and_engine
 
     payload = {"email": "alice@example.com", "email_lookup": "alice@example.com"}
     response = client.post("/customers", json=payload)
@@ -52,4 +65,16 @@ def test_customer_create_and_lookup(tmp_path: Path) -> None:
         customer = session.exec(statement).first()
         assert customer is not None
 
-    app.dependency_overrides.clear()
+    assert client.get("/customers/99999").status_code == 404
+    assert client.get("/customers/by-email/missing@example.com").status_code == 404
+
+
+def test_session_dependency_closes_session(monkeypatch):
+    from unittest.mock import MagicMock
+
+    session_type = MagicMock()
+    monkeypatch.setattr(database, "Session", session_type)
+    generator = get_session()
+    assert next(generator) is session_type.return_value.__enter__.return_value
+    generator.close()
+    session_type.return_value.__exit__.assert_called_once()

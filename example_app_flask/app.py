@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from flask import Flask, jsonify, request
-from sqlmodel import Session, select
+from pydantic import ValidationError
+from sqlmodel import select
 
 from example_app_flask.database import get_session, init_db
 from example_app_flask.models import Customer
@@ -10,14 +11,15 @@ from example_app_flask.models import Customer
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    @app.before_first_request
-    def _init_db() -> None:
-        init_db()
+    init_db()
 
     @app.post("/customers")
     def create_customer():
         payload = request.get_json(force=True)
-        customer = Customer(**payload)
+        try:
+            customer = Customer.model_validate(payload)
+        except ValidationError:
+            return jsonify({"detail": "Invalid customer payload"}), 422
         with get_session() as session:
             session.add(customer)
             session.commit()

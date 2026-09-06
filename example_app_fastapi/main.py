@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from example_app_fastapi.database import get_session, init_db
 from example_app_fastapi.models import Customer
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
