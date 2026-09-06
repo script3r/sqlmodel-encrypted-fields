@@ -69,4 +69,6 @@ jobs:
           cd /tmp
           /tmp/wheel-test/bin/python "$GITHUB_WORKSPACE/scripts/smoke_test.py" "$version"
       - name: Audit runtime dependencies
-        run: /tmp/wheel-test/bin/python -m pip freeze | rg -v '^sqlmodel-encrypted-fields' > /tmp/runtime.txt && pip-audit -r /tmp/runtime.txt
+        run: |
+          /tmp/wheel-test/bin/python -m pip freeze | grep -v '^sqlmodel-encrypted-fields' > /tmp/runtime.txt
+          pip-audit -r /tmp/runtime.txt
